@@ -104,14 +104,18 @@ def load_file(conn: psycopg.Connection, path: Path) -> int:
     return loaded
 
 
-def main() -> int:
+def get_data_dir() -> Path:
     load_dotenv(PROJECT_ROOT / ".env")
-    data_dir = (PROJECT_ROOT / os.getenv("DATA_DIR", "data")).resolve()
+    return (PROJECT_ROOT / os.getenv("DATA_DIR", "data")).resolve()
+
+
+def load_all(data_dir: Path) -> list[tuple[str, str, int]]:
+    """Carga todos los CSV de data_dir. Devuelve (archivo, tabla, filas) por archivo."""
     files = sorted(data_dir.glob("*.csv"))
     if not files:
-        print(f"No se encontraron archivos .csv en {data_dir}", file=sys.stderr)
-        return 1
+        raise FileNotFoundError(f"No se encontraron archivos .csv en {data_dir}")
 
+    results = []
     with get_connection() as conn:
         conn.execute(sql.SQL("CREATE SCHEMA IF NOT EXISTS {}").format(sql.Identifier(SCHEMA)))
         conn.execute(
@@ -128,13 +132,23 @@ def main() -> int:
                 """
             ).format(sql.Identifier(SCHEMA))
         )
-
-        print(f"Cargando {len(files)} archivos desde {data_dir}\n")
         for path in files:
             # Una transacción por archivo: si uno falla, los demás quedan cargados
             with conn.transaction():
                 loaded = load_file(conn, path)
-            print(f"  {path.name:<40} -> {SCHEMA}.{normalize_identifier(path.stem):<35} {loaded:>6} filas")
+            results.append((path.name, f"{SCHEMA}.{normalize_identifier(path.stem)}", loaded))
+    return results
+
+
+def main() -> int:
+    data_dir = get_data_dir()
+    try:
+        print(f"Cargando archivos desde {data_dir}\n")
+        for name, table, loaded in load_all(data_dir):
+            print(f"  {name:<40} -> {table:<39} {loaded:>6} filas")
+    except FileNotFoundError as exc:
+        print(exc, file=sys.stderr)
+        return 1
 
     print("\nCarga completada.")
     return 0
