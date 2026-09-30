@@ -51,7 +51,7 @@
             {% for r in riesgo %}
             <tr>
               <td><a class="mono" href="{% url 'portafolios:cliente' %}?cliente={{ r.id_cliente|urlencode }}">{{ r.id_cliente }}</a></td>
-              <td>{{ r.perfil_riesgo|title }}</td><td>{{ r.perfil_implicito|title }}</td>
+              <td>{{ r.perfil_riesgo|lower|capfirst }}</td><td>{{ r.perfil_implicito|lower|capfirst }}</td>
               <td>{% include "portafolios/_coherencia.html" with estado=r.coherencia %}</td>
               <td class="num">{{ r.volatilidad_anual|pct }}</td><td class="num">{{ r.volatilidad_cop|pct }}</td>
               <td class="num">{{ r.var_95_1d_cop|millones }}</td><td class="num">{{ r.aum_cop|millones }}</td>

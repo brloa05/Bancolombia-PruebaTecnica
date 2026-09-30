@@ -179,7 +179,7 @@ def barras_cartera(filas: list[dict], campo_grupo: str) -> str:
     """Total de la cartera local por grupo (una serie: un solo color)."""
     filas = sorted((f for f in filas if f["total_cop"]), key=lambda f: f["total_cop"])
     etiquetas = [
-        f"{f[campo_grupo].title()} · {f['clientes']} cliente{'s' if f['clientes'] != 1 else ''}" for f in filas
+        f"{f[campo_grupo].capitalize()} · {f['clientes']} cliente{'s' if f['clientes'] != 1 else ''}" for f in filas
     ]
     fig = go.Figure(go.Bar(
         y=etiquetas,

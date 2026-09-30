@@ -1,9 +1,15 @@
+import json
+from urllib.parse import quote
+
+from django.contrib import messages
 from django.http import HttpResponse
-from django.shortcuts import render
+from django.shortcuts import redirect, render
+from django.urls import reverse
 from django.views.decorators.cache import cache_control
+from django.views.decorators.http import require_POST
 from plotly.offline import get_plotlyjs
 
-from . import consultas, graficas
+from . import consultas, graficas, ia
 
 
 def _sin_datos(request):
@@ -27,8 +33,12 @@ def cliente(request):
     evolucion_local = consultas.evolucion_local(seleccionado)
     evolucion_usd = consultas.evolucion_usd(seleccionado)
     modelo = consultas.modelo_listo()
+    propuesta = ia.ultima(seleccionado)
 
     return render(request, "portafolios/cliente.html", {
+        "ia_disponible": ia.disponible(),
+        "propuesta": propuesta,
+        "propuesta_contexto": json.dumps(propuesta.contexto, ensure_ascii=False, indent=2) if propuesta else "",
         "clientes": clientes,
         "resumen": resumen,
         "riesgo": consultas.riesgo_cliente(seleccionado) if modelo else None,
@@ -71,6 +81,18 @@ def cartera(request):
             "perfil": graficas.barras_cartera(por_perfil, "grupo"),
         },
     })
+
+
+@require_POST
+def generar_propuesta(request):
+    """Genera con IA el resumen y la propuesta comercial del cliente."""
+    id_cliente = request.POST.get("cliente", "")
+    try:
+        propuesta = ia.generar(id_cliente)
+        messages.success(request, f"Propuesta generada con {propuesta.modelo}.")
+    except ia.ErrorIA as exc:
+        messages.error(request, str(exc))
+    return redirect(f"{reverse('portafolios:cliente')}?cliente={quote(id_cliente)}#ia")
 
 
 def modelo(request):

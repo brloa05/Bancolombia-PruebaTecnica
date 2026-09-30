@@ -54,7 +54,7 @@
         <summary>Ver tabla</summary>
         <table>
           <thead><tr><th>Perfil</th><th class="num">Clientes</th><th class="num">Local (COP)</th><th class="num">Internacional (US$)</th></tr></thead>
-          <tbody>{% for f in por_perfil %}<tr><td>{{ f.grupo|title }}</td><td class="num">{{ f.clientes }}</td><td class="num">{{ f.total_cop|cop }}</td><td class="num">{{ f.total_usd|usd }}</td></tr>{% endfor %}</tbody>
+          <tbody>{% for f in por_perfil %}<tr><td>{{ f.grupo|lower|capfirst }}</td><td class="num">{{ f.clientes }}</td><td class="num">{{ f.total_cop|cop }}</td><td class="num">{{ f.total_usd|usd }}</td></tr>{% endfor %}</tbody>
         </table>
       </details>
     </div>
@@ -77,7 +77,7 @@
         <tr>
           <td><a class="mono" href="{% url 'portafolios:cliente' %}?cliente={{ c.id_cliente|urlencode }}">{{ c.id_cliente }}</a></td>
           <td>{{ c.banca|default:"—" }}</td>
-          <td>{{ c.perfil_riesgo|default:"—"|title }}</td>
+          <td>{{ c.perfil_riesgo|default:"—"|lower|capfirst }}</td>
           <td class="num">{{ c.total_cop|cop }}</td>
           <td class="num">{{ c.pct_renta_variable|pct:0 }}</td>
           <td class="num">{{ c.pct_renta_fija|pct:0 }}</td>

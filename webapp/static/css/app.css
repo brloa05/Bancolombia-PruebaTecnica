@@ -328,3 +328,5 @@ textarea.sql { width: 100%; min-height: 160px; font-family: var(--mono); font-si
   .tile__valor { font-size: 20px; }
   .consulta { grid-template-columns: 1fr; }
 }
+
+button:disabled { opacity: 0.45; cursor: not-allowed; filter: none; }

@@ -14,7 +14,7 @@
     <select id="cliente" name="cliente" onchange="this.form.submit()">
       {% for c in clientes %}
         <option value="{{ c.id_cliente }}" {% if c.id_cliente == resumen.id_cliente %}selected{% endif %}>
-          {{ c.id_cliente }} — {{ c.banca|default:"Sin banca" }} · {{ c.perfil_riesgo|default:"Sin perfil"|title }}
+          {{ c.id_cliente }} — {{ c.banca|default:"Sin banca" }} · {{ c.perfil_riesgo|default:"Sin perfil"|lower|capfirst }}
         </option>
       {% endfor %}
     </select>
@@ -47,7 +47,7 @@
   </div>
   <div class="tarjeta">
     <div class="tile__etiqueta">Perfil de riesgo</div>
-    <div class="tile__valor tile__valor--texto">{{ resumen.perfil_riesgo|default:"—"|title }}</div>
+    <div class="tile__valor tile__valor--texto">{{ resumen.perfil_riesgo|default:"—"|lower|capfirst }}</div>
     <div class="tile__detalle">Banca {{ resumen.banca|default:"—" }}</div>
   </div>
   <div class="tarjeta">
@@ -75,7 +75,7 @@
   <div class="rejilla rejilla--tiles">
     <div class="tarjeta">
       <div class="tile__etiqueta">Perfil declarado vs. implícito</div>
-      <div class="tile__valor tile__valor--texto">{{ riesgo.perfil_riesgo|title }} → {{ riesgo.perfil_implicito|title }}</div>
+      <div class="tile__valor tile__valor--texto">{{ riesgo.perfil_riesgo|lower|capfirst }} → {{ riesgo.perfil_implicito|lower|capfirst }}</div>
       <div class="tile__detalle">{% include "portafolios/_coherencia.html" with estado=riesgo.coherencia %}</div>
     </div>
     <div class="tarjeta">
@@ -100,6 +100,52 @@
     {% include "portafolios/_recomendaciones.html" with con_cliente=False %}
   </div>
   {% endif %}
+</section>
+
+<section class="seccion" id="ia">
+  <h2>Asistente comercial con IA <span class="seccion__sub">borrador para preparar la conversación con el cliente</span></h2>
+  <div class="tarjeta">
+    {% if propuesta %}
+      {% with p=propuesta.contenido %}
+      <p style="margin-top:0">{{ p.resumen }}</p>
+      <div class="rejilla rejilla--2">
+        <div>
+          <h3>Puntos clave</h3>
+          <ul>{% for x in p.puntos_clave %}<li>{{ x }}</li>{% endfor %}</ul>
+        </div>
+        <div>
+          <h3>Propuesta</h3>
+          <p>{{ p.propuesta }}</p>
+        </div>
+        <div>
+          <h3>Guion para la llamada</h3>
+          <ol>{% for x in p.guion_llamada %}<li>{{ x }}</li>{% endfor %}</ol>
+        </div>
+        <div>
+          <h3>Alertas</h3>
+          {% if p.alertas %}<ul>{% for x in p.alertas %}<li>⚠ {{ x }}</li>{% endfor %}</ul>{% else %}<p class="tarjeta__nota">Sin alertas.</p>{% endif %}
+        </div>
+      </div>
+      {% endwith %}
+      <p class="tarjeta__nota">Generado por {{ propuesta.modelo }} el {{ propuesta.creada|date:"Y-m-d H:i" }}
+        · {{ propuesta.tokens_entrada }} + {{ propuesta.tokens_salida }} tokens. Texto redactado por IA: valídalo antes de usarlo con el cliente.</p>
+      <details class="tabla-vista">
+        <summary>Ver los datos enviados al modelo</summary>
+        <p class="tarjeta__nota">Solo cifras agregadas del portafolio: no se envía el ID del cliente ni datos personales.</p>
+        <pre class="codigo">{{ propuesta_contexto }}</pre>
+      </details>
+    {% else %}
+      <p class="tarjeta__nota" style="margin-top:0">Claude redacta un resumen del cliente, la siguiente acción comercial,
+        un guion para la llamada y alertas, a partir del riesgo, el perfil, el segmento y las recomendaciones del modelo.
+        No se envía el ID del cliente ni datos personales.</p>
+    {% endif %}
+    <form method="post" action="{% url 'portafolios:generar_propuesta' %}" class="acciones" onsubmit="this.querySelector('button').disabled = true; this.querySelector('button').textContent = 'Generando… (puede tardar unos segundos)';">
+      {% csrf_token %}
+      <input type="hidden" name="cliente" value="{{ resumen.id_cliente }}">
+      <button type="submit" {% if not ia_disponible %}disabled{% endif %}>✦ {% if propuesta %}Regenerar{% else %}Generar{% endif %} propuesta con IA</button>
+      {% if not ia_disponible %}<span class="tarjeta__nota">Para activarlo, agrega <span class="mono">ANTHROPIC_API_KEY</span> al archivo <span class="mono">.env</span>.</span>{% endif %}
+    </form>
+  </div>
 </section>
 {% endif %}
 
