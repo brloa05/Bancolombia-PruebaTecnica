@@ -26,3 +26,6 @@ Thumbs.db
 
 # Excepción: snapshot de precios de mercado (datos públicos, necesarios para reproducir el modelo)
 !analytics/datos/*.csv
+
+# Guía técnica personal (no se versiona)
+GUIA_TECNICA.md
