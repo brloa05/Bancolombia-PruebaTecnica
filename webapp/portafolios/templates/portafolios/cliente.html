@@ -107,6 +107,12 @@
   <div class="tarjeta">
     {% if propuesta %}
       {% with p=propuesta.contenido %}
+      {% if p.verificacion %}
+      <div class="aviso aviso--alerta" role="note">
+        <span class="aviso__icono" aria-hidden="true">⚠</span>
+        <span><b>Verificación automática:</b> {% for v in p.verificacion %}{{ v }} {% endfor %}Revisa el texto antes de usarlo.</span>
+      </div>
+      {% endif %}
       <p style="margin-top:0">{{ p.resumen }}</p>
       <div class="rejilla rejilla--2">
         <div>
@@ -127,23 +133,23 @@
         </div>
       </div>
       {% endwith %}
-      <p class="tarjeta__nota">Generado por {{ propuesta.modelo }} el {{ propuesta.creada|date:"Y-m-d H:i" }}
+      <p class="tarjeta__nota">Generado por {{ propuesta.modelo }} (local) el {{ propuesta.creada|date:"Y-m-d H:i" }}
         · {{ propuesta.tokens_entrada }} + {{ propuesta.tokens_salida }} tokens. Texto redactado por IA: valídalo antes de usarlo con el cliente.</p>
       <details class="tabla-vista">
         <summary>Ver los datos enviados al modelo</summary>
-        <p class="tarjeta__nota">Solo cifras agregadas del portafolio: no se envía el ID del cliente ni datos personales.</p>
+        <p class="tarjeta__nota">Solo cifras agregadas del portafolio, sin el ID del cliente ni datos personales. El modelo corre en este equipo: los datos no salen de él.</p>
         <pre class="codigo">{{ propuesta_contexto }}</pre>
       </details>
     {% else %}
-      <p class="tarjeta__nota" style="margin-top:0">Claude redacta un resumen del cliente, la siguiente acción comercial,
-        un guion para la llamada y alertas, a partir del riesgo, el perfil, el segmento y las recomendaciones del modelo.
-        No se envía el ID del cliente ni datos personales.</p>
+      <p class="tarjeta__nota" style="margin-top:0">Un modelo de lenguaje abierto ({{ ia_modelo }}) que corre en este equipo redacta un resumen
+        del cliente, la siguiente acción comercial, un guion para la llamada y alertas, a partir del riesgo, el perfil, el segmento y
+        las recomendaciones del modelo. Los datos no salen del equipo y no incluyen el ID del cliente.</p>
     {% endif %}
-    <form method="post" action="{% url 'portafolios:generar_propuesta' %}" class="acciones" onsubmit="this.querySelector('button').disabled = true; this.querySelector('button').textContent = 'Generando… (puede tardar unos segundos)';">
+    <form method="post" action="{% url 'portafolios:generar_propuesta' %}" class="acciones" onsubmit="this.querySelector('button').disabled = true; this.querySelector('button').textContent = 'Generando… (puede tardar hasta un par de minutos)';">
       {% csrf_token %}
       <input type="hidden" name="cliente" value="{{ resumen.id_cliente }}">
       <button type="submit" {% if not ia_disponible %}disabled{% endif %}>✦ {% if propuesta %}Regenerar{% else %}Generar{% endif %} propuesta con IA</button>
-      {% if not ia_disponible %}<span class="tarjeta__nota">Para activarlo, agrega <span class="mono">ANTHROPIC_API_KEY</span> al archivo <span class="mono">.env</span>.</span>{% endif %}
+      {% if not ia_disponible %}<span class="tarjeta__nota">{{ ia_mensaje }}</span>{% endif %}
     </form>
   </div>
 </section>

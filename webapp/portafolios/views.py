@@ -34,9 +34,12 @@ def cliente(request):
     evolucion_usd = consultas.evolucion_usd(seleccionado)
     modelo = consultas.modelo_listo()
     propuesta = ia.ultima(seleccionado)
+    ia_disponible, ia_mensaje = ia.estado()
 
     return render(request, "portafolios/cliente.html", {
-        "ia_disponible": ia.disponible(),
+        "ia_disponible": ia_disponible,
+        "ia_mensaje": ia_mensaje,
+        "ia_modelo": ia.MODELO,
         "propuesta": propuesta,
         "propuesta_contexto": json.dumps(propuesta.contexto, ensure_ascii=False, indent=2) if propuesta else "",
         "clientes": clientes,
