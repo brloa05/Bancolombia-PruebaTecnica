@@ -26,10 +26,13 @@ def cliente(request):
     usd = consultas.portafolio_usd(seleccionado)
     evolucion_local = consultas.evolucion_local(seleccionado)
     evolucion_usd = consultas.evolucion_usd(seleccionado)
+    modelo = consultas.modelo_listo()
 
     return render(request, "portafolios/cliente.html", {
         "clientes": clientes,
         "resumen": resumen,
+        "riesgo": consultas.riesgo_cliente(seleccionado) if modelo else None,
+        "recomendaciones": consultas.recomendaciones(seleccionado) if modelo else [],
         "local": local,
         "usd": usd,
         "composicion": [
@@ -66,6 +69,31 @@ def cartera(request):
         "graficas": {
             "banca": graficas.barras_cartera(por_banca, "grupo"),
             "perfil": graficas.barras_cartera(por_perfil, "grupo"),
+        },
+    })
+
+
+def modelo(request):
+    """Riesgo vs. perfil declarado, segmentos, recomendaciones y validación con mercado."""
+    if not consultas.pipeline_listo() or not consultas.modelo_listo():
+        return _sin_datos(request)
+
+    riesgo = consultas.riesgo_clientes()
+    meta = consultas.metadatos_modelo()
+    recomendaciones = consultas.recomendaciones()
+    conteo = {estado: sum(1 for r in riesgo if r["coherencia"] == estado) for estado in graficas.ESTADO}
+    return render(request, "portafolios/modelo.html", {
+        "riesgo": riesgo,
+        "conteo": conteo,
+        "segmentos": consultas.segmentos(),
+        "recomendaciones": recomendaciones,
+        "n_alta": sum(1 for r in recomendaciones if r["prioridad"] == 1),
+        "validacion": consultas.validacion_mercado(),
+        "meta": meta,
+        "internacionales": [r for r in riesgo if r["pct_internacional"] >= 0.1],
+        "graficas": {
+            "perfil": graficas.dispersion_perfil(riesgo, meta["bandas_volatilidad"]),
+            "cambiario": graficas.barras_cambiario(riesgo),
         },
     })
 

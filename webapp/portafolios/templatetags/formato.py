@@ -63,5 +63,10 @@ def celda(valor):
 
 
 @register.filter
+def get_item(diccionario, clave):
+    return diccionario.get(clave)
+
+
+@register.filter
 def es_numero(valor):
     return isinstance(valor, (int, float, Decimal)) and not isinstance(valor, bool)

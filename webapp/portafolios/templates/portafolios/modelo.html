@@ -1,0 +1,153 @@
+{% extends "base.html" %}
+{% load formato %}
+
+{% block titulo %}Modelo de riesgo · Analítica de Inversiones{% endblock %}
+
+{% block contenido %}
+<div class="encabezado">
+  <div>
+    <h1>Modelo de riesgo y perfil del cliente</h1>
+    <p>Riesgo de mercado de cada portafolio consolidado, calculado con precios reales de los últimos 12 meses.
+       Se compara con el perfil de riesgo declarado, se segmenta la cartera y se sugiere la siguiente mejor acción.</p>
+  </div>
+</div>
+
+<div class="rejilla rejilla--tiles">
+  <div class="tarjeta">
+    <div class="tile__etiqueta">? Perfil sin definir</div>
+    <div class="tile__valor">{{ conteo|get_item:"Perfil sin definir" }} <span class="tile__detalle">de {{ riesgo|length }}</span></div>
+    <div class="tile__detalle">deben perfilarse antes de ofrecerles productos</div>
+  </div>
+  <div class="tarjeta">
+    <div class="tile__etiqueta">▲ Riesgo por encima del perfil</div>
+    <div class="tile__valor">{{ conteo|get_item:"Riesgo por encima del perfil" }}</div>
+    <div class="tile__detalle">revisar adecuación</div>
+  </div>
+  <div class="tarjeta">
+    <div class="tile__etiqueta">▼ Riesgo por debajo del perfil</div>
+    <div class="tile__valor">{{ conteo|get_item:"Riesgo por debajo del perfil" }}</div>
+    <div class="tile__detalle">oportunidad comercial</div>
+  </div>
+  <div class="tarjeta">
+    <div class="tile__etiqueta">✓ Coherentes</div>
+    <div class="tile__valor">{{ conteo|get_item:"Coherente" }}</div>
+    <div class="tile__detalle">riesgo acorde al perfil</div>
+  </div>
+</div>
+
+<section class="seccion">
+  <h2>Riesgo del portafolio vs. perfil declarado</h2>
+  <div class="tarjeta">
+    {% include "portafolios/_grafica.html" with figura=graficas.perfil id="g-perfil" etiqueta="Volatilidad del portafolio frente al perfil de riesgo declarado" %}
+    <p class="tarjeta__nota">Las franjas son el perfil implícito según la volatilidad: conservador hasta
+      {{ meta.bandas_volatilidad.CONSERVADOR|pct:0 }}, moderado hasta {{ meta.bandas_volatilidad.MODERADO|pct:0 }}, agresivo por encima.
+      Un cliente es coherente cuando su punto cae en la franja de su perfil declarado.</p>
+    <details class="tabla-vista">
+      <summary>Ver tabla ({{ riesgo|length }} clientes)</summary>
+      <div class="tabla-scroll">
+        <table>
+          <thead><tr><th>Cliente</th><th>Declarado</th><th>Implícito</th><th>Coherencia</th><th class="num">Volatilidad</th><th class="num">Vol. en COP</th><th class="num">VaR 95 % 1 día</th><th class="num">Portafolio</th><th>Segmento</th></tr></thead>
+          <tbody>
+            {% for r in riesgo %}
+            <tr>
+              <td><a class="mono" href="{% url 'portafolios:cliente' %}?cliente={{ r.id_cliente|urlencode }}">{{ r.id_cliente }}</a></td>
+              <td>{{ r.perfil_riesgo|title }}</td><td>{{ r.perfil_implicito|title }}</td>
+              <td>{% include "portafolios/_coherencia.html" with estado=r.coherencia %}</td>
+              <td class="num">{{ r.volatilidad_anual|pct }}</td><td class="num">{{ r.volatilidad_cop|pct }}</td>
+              <td class="num">{{ r.var_95_1d_cop|millones }}</td><td class="num">{{ r.aum_cop|millones }}</td>
+              <td>{{ r.segmento }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </details>
+  </div>
+</section>
+
+<section class="seccion">
+  <h2>Segmentos de clientes <span class="seccion__sub">K-Means · k = {{ meta.segmentacion.k }} · silhouette {{ meta.segmentacion.silhouette|numero:2 }}</span></h2>
+  <div class="rejilla rejilla--2">
+    {% for s in segmentos %}
+    <div class="tarjeta">
+      <div class="tarjeta__titulo"><h3>{{ s.segmento }}</h3><span class="etiqueta">{{ s.clientes }} clientes</span></div>
+      <div class="tile__valor">{{ s.aum_cop|millones }} <span class="tile__detalle">en total · mediana {{ s.aum_mediano_cop|millones }}</span></div>
+      <div class="leyenda" style="margin-top:8px">
+        <span>Volatilidad <b>{{ s.volatilidad_anual|pct }}</b></span>
+        <span>Renta variable <b>{{ s.pct_renta_variable_total|pct:0 }}</b></span>
+        <span>Renta fija <b>{{ s.pct_renta_fija|pct:0 }}</b></span>
+        <span>Liquidez <b>{{ s.pct_liquidez|pct:0 }}</b></span>
+        <span>Internacional <b>{{ s.pct_internacional|pct:0 }}</b></span>
+        <span>Concentración (HHI) <b>{{ s.hhi|numero:2 }}</b></span>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+</section>
+
+<section class="seccion">
+  <h2>Riesgo cambiario en los portafolios internacionales</h2>
+  <div class="tarjeta">
+    {% include "portafolios/_grafica.html" with figura=graficas.cambiario id="g-cambiario" etiqueta="Volatilidad de los activos frente a la volatilidad en pesos" %}
+    <p class="tarjeta__nota">Medido en pesos, la mayor parte del riesgo de los portafolios internacionales viene de la TRM y no de los activos.
+      El perfil implícito se calcula sin el efecto TRM (describe los activos elegidos); el VaR en pesos sí lo incluye.</p>
+    <details class="tabla-vista">
+      <summary>Ver tabla</summary>
+      <table>
+        <thead><tr><th>Cliente</th><th class="num">Activos</th><th class="num">En pesos</th><th class="num">% del riesgo por TRM</th></tr></thead>
+        <tbody>{% for r in internacionales %}<tr><td class="mono">{{ r.id_cliente }}</td><td class="num">{{ r.volatilidad_anual|pct }}</td><td class="num">{{ r.volatilidad_cop|pct }}</td><td class="num">{{ r.pct_riesgo_cambiario|pct:0 }}</td></tr>{% endfor %}</tbody>
+      </table>
+    </details>
+  </div>
+</section>
+
+<section class="seccion">
+  <h2>Siguiente mejor acción <span class="seccion__sub">{{ recomendaciones|length }} recomendaciones · {{ n_alta }} de prioridad alta</span></h2>
+  <div class="tarjeta">{% include "portafolios/_recomendaciones.html" with con_cliente=True %}</div>
+</section>
+
+<section class="seccion">
+  <h2>Validación con precios de mercado</h2>
+  <div class="tarjeta">
+    <p class="tarjeta__nota" style="margin-top:0">Correlación entre la variación diaria del saldo de cada acción y la de su precio en la BVC.
+      Con un día de rezago (el saldo del día D usa el cierre de D-1) las acciones replican su precio; sin rezago la correlación es cercana a cero.
+      Así se confirmó la corrección 1115 → 1015 del catálogo y se identificó que la "Renta Variable sin código" es TERPEL.</p>
+    <div class="tabla-scroll">
+      <table>
+        <thead><tr><th>Código</th><th>Activo</th><th>Referencia usada</th><th class="num">r (rezago 1 día)</th><th class="num">r sin rezago</th><th>Mejor coincidencia en la BVC</th><th>Resultado</th></tr></thead>
+        <tbody>
+          {% for v in validacion %}
+          <tr>
+            <td class="mono">{{ v.cod_activo }}</td><td>{{ v.activo }}</td>
+            <td class="mono">{{ v.ticker_asignado|default:"—" }}</td>
+            <td class="num">{{ v.correlacion_asignado|numero:2 }}</td>
+            <td class="num">{{ v.correlacion_sin_rezago|numero:2 }}</td>
+            <td class="mono">{{ v.ticker_mejor }} ({{ v.correlacion_mejor|numero:2 }})</td>
+            <td>{% if v.ticker_asignado and v.ticker_asignado == v.ticker_mejor and v.correlacion_mejor >= 0.4 %}<span class="etiqueta etiqueta--ok">✓ Validado</span>{% elif v.ticker_asignado %}<span class="etiqueta">ⓘ Proxy</span>{% else %}<span class="etiqueta">ⓘ Sin precio local</span>{% endif %}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<section class="seccion">
+  <details class="tarjeta">
+    <summary style="cursor:pointer"><b>Metodología</b></summary>
+    <ul class="tarjeta__nota" style="font-size:13px">
+      <li><b>Riesgo:</b> volatilidad anual √(w'Σw) con Σ = covarianza de retornos diarios entre {{ meta.ventana.0 }} y {{ meta.ventana.1 }}. Cada posición usa el precio del activo, un ETF de referencia (fondos UCITS, bonos, notas estructuradas) o, para FICs y CDT, la volatilidad observada de su saldo diario.</li>
+      <li><b>VaR 95 % a 1 día</b> (paramétrico) en pesos, incluyendo el riesgo cambiario.</li>
+      <li><b>Perfil implícito:</b> bandas de volatilidad sin efecto TRM (conservador ≤ {{ meta.bandas_volatilidad.CONSERVADOR|pct:0 }}, moderado ≤ {{ meta.bandas_volatilidad.MODERADO|pct:0 }}).</li>
+      <li><b>Segmentación:</b> K-Means sobre {{ meta.variables_segmentacion|join:", " }} (estandarizadas); k elegido por silhouette.</li>
+      <li><b>Recomendaciones:</b> reglas trazables (perfilamiento, adecuación, oportunidad, concentración, internacionalización y vencimientos en los próximos 90 días).</li>
+    </ul>
+  </details>
+</section>
+{% endblock %}
+
+{% block scripts %}
+{% load static %}
+<script src="{% url 'portafolios:plotly_js' %}"></script>
+<script src="{% static 'js/graficas.js' %}"></script>
+{% endblock %}

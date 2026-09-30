@@ -3,6 +3,8 @@
 La aplicación solo lee: toda la transformación ya ocurrió en SQL (sql/*.sql).
 """
 
+import json
+
 from django.db import connection
 
 
@@ -100,3 +102,47 @@ def bitacora_calidad() -> list[dict]:
 
 def volumen_calidad() -> list[dict]:
     return _filas("SELECT * FROM calidad.resumen_volumen")
+
+
+# ---------------------------------------------------------------------------
+# Modelo analítico (esquema analitica, lo escribe analytics/modelo.py)
+# ---------------------------------------------------------------------------
+def modelo_listo() -> bool:
+    with connection.cursor() as cursor:
+        cursor.execute("SELECT to_regclass('analitica.riesgo_cliente') IS NOT NULL")
+        return cursor.fetchone()[0]
+
+
+def riesgo_clientes() -> list[dict]:
+    return _filas("""
+        SELECT r.*, c.id_truncado
+        FROM analitica.riesgo_cliente r
+        JOIN core.dim_cliente c USING (id_cliente)
+        ORDER BY r.aum_cop DESC
+    """)
+
+
+def riesgo_cliente(id_cliente: str) -> dict | None:
+    filas = _filas("SELECT * FROM analitica.riesgo_cliente WHERE id_cliente = %s", [id_cliente])
+    return filas[0] if filas else None
+
+
+def segmentos() -> list[dict]:
+    return _filas("SELECT * FROM analitica.segmentos ORDER BY aum_cop DESC")
+
+
+def recomendaciones(id_cliente: str | None = None) -> list[dict]:
+    filtro, params = ("WHERE id_cliente = %s", [id_cliente]) if id_cliente else ("", [])
+    return _filas(f"""
+        SELECT * FROM analitica.recomendaciones {filtro}
+        ORDER BY prioridad, monto_cop DESC NULLS LAST, id_cliente
+    """, params)
+
+
+def validacion_mercado() -> list[dict]:
+    return _filas("SELECT * FROM analitica.validacion_mercado ORDER BY cod_activo")
+
+
+def metadatos_modelo() -> dict:
+    filas = _filas("SELECT valor FROM analitica.metadatos WHERE clave = 'modelo'")
+    return json.loads(filas[0]["valor"]) if filas else {}

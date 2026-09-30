@@ -14,7 +14,7 @@
 <div class="rejilla rejilla--2">
   <div class="tarjeta">
     <h2>Ejecutar pipeline</h2>
-    <p class="tarjeta__nota">Reconstruye los esquemas staging, core, mart y calidad (≈ 4 s).</p>
+    <p class="tarjeta__nota">Carga los precios de mercado, reconstruye los esquemas staging, core, mart y calidad, y recalcula el modelo analítico (≈ 10 s).</p>
     <form method="post" action="{% url 'pipeline:ejecutar' %}" class="acciones">
       {% csrf_token %}
       <label class="check"><input type="checkbox" name="carga_csv" value="1"> Recargar antes los CSV de <span class="mono">data/</span></label>

@@ -25,6 +25,7 @@
     for (const eje of ["xaxis", "yaxis"]) {
       if (layout[eje]) Object.assign(layout[eje], { gridcolor: "#2c2c2a", zerolinecolor: "#383835", linecolor: "#383835" });
     }
+    for (const nota of layout.annotations || []) nota.font = { ...nota.font, color: "#c3c2b7" };
     for (const traza of figura.data) {
       if (traza.marker && PASO_OSCURO[traza.marker.color]) traza.marker.color = PASO_OSCURO[traza.marker.color];
       if (traza.marker && traza.marker.line) traza.marker.line.color = "#1a1a19";

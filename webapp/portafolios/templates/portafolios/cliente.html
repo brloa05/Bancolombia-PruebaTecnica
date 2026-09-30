@@ -69,6 +69,40 @@
   </div>
 </div>
 
+{% if riesgo %}
+<section class="seccion">
+  <h2>Riesgo y perfil <span class="seccion__sub">portafolio consolidado en pesos · <a href="{% url 'portafolios:modelo' %}">ver modelo</a></span></h2>
+  <div class="rejilla rejilla--tiles">
+    <div class="tarjeta">
+      <div class="tile__etiqueta">Perfil declarado vs. implícito</div>
+      <div class="tile__valor tile__valor--texto">{{ riesgo.perfil_riesgo|title }} → {{ riesgo.perfil_implicito|title }}</div>
+      <div class="tile__detalle">{% include "portafolios/_coherencia.html" with estado=riesgo.coherencia %}</div>
+    </div>
+    <div class="tarjeta">
+      <div class="tile__etiqueta">Volatilidad anual</div>
+      <div class="tile__valor">{{ riesgo.volatilidad_anual|pct }}</div>
+      <div class="tile__detalle">{{ riesgo.volatilidad_cop|pct }} en pesos · {{ riesgo.pct_riesgo_cambiario|pct:0 }} del riesgo por TRM</div>
+    </div>
+    <div class="tarjeta">
+      <div class="tile__etiqueta">VaR 95 % a 1 día</div>
+      <div class="tile__valor">{{ riesgo.var_95_1d_cop|millones }}</div>
+      <div class="tile__detalle">pérdida que no se supera 19 de cada 20 días</div>
+    </div>
+    <div class="tarjeta">
+      <div class="tile__etiqueta">Segmento</div>
+      <div class="tile__valor tile__valor--texto">{{ riesgo.segmento }}</div>
+      <div class="tile__detalle">portafolio total {{ riesgo.aum_cop|millones }} · {{ riesgo.pct_internacional|pct:0 }} internacional</div>
+    </div>
+  </div>
+  {% if recomendaciones %}
+  <div class="tarjeta" style="margin-top:16px">
+    <div class="tarjeta__titulo"><h3>Siguiente mejor acción</h3></div>
+    {% include "portafolios/_recomendaciones.html" with con_cliente=False %}
+  </div>
+  {% endif %}
+</section>
+{% endif %}
+
 <section class="seccion">
   <h2>Portafolio local (COP) <span class="seccion__sub">corte {{ resumen.fecha_corte_local|date:"Y-m-d" }}</span></h2>
   <div class="tarjeta">

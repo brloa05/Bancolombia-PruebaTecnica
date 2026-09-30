@@ -1,0 +1,4 @@
+{% if estado == 'Coherente' %}<span class="etiqueta etiqueta--ok">✓ Coherente</span>
+{% elif estado == 'Riesgo por encima del perfil' %}<span class="etiqueta etiqueta--error">▲ Por encima del perfil</span>
+{% elif estado == 'Riesgo por debajo del perfil' %}<span class="etiqueta etiqueta--alerta">▼ Por debajo del perfil</span>
+{% else %}<span class="etiqueta">? Perfil sin definir</span>{% endif %}

@@ -1,0 +1,23 @@
+{% load formato %}
+<div class="tabla-scroll">
+  <table>
+    <thead>
+      <tr>
+        <th>Prioridad</th><th>Tipo</th>{% if con_cliente %}<th>Cliente</th>{% endif %}<th>Acción sugerida</th><th class="num">Monto asociado</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for r in recomendaciones %}
+      <tr>
+        <td>{% if r.prioridad == 1 %}<span class="etiqueta etiqueta--error">● Alta</span>{% elif r.prioridad == 2 %}<span class="etiqueta etiqueta--alerta">● Media</span>{% else %}<span class="etiqueta">● Baja</span>{% endif %}</td>
+        <td>{{ r.tipo }}</td>
+        {% if con_cliente %}<td><a class="mono" href="{% url 'portafolios:cliente' %}?cliente={{ r.id_cliente|urlencode }}">{{ r.id_cliente }}</a></td>{% endif %}
+        <td><b>{{ r.titulo }}</b><br><span class="tarjeta__nota" style="font-size:13px">{{ r.detalle }}</span></td>
+        <td class="num">{% if r.monto_cop %}{{ r.monto_cop|millones }}{% else %}—{% endif %}</td>
+      </tr>
+      {% empty %}
+      <tr><td colspan="5" class="vacio">Sin recomendaciones.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>

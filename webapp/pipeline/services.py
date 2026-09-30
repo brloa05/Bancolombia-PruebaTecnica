@@ -1,6 +1,8 @@
 """Lógica de gestión del pipeline SQL: sincronización, ejecución y consulta."""
 
+import contextlib
 import hashlib
+import io
 import re
 import sys
 import time
@@ -12,10 +14,11 @@ from django.utils import timezone
 
 from .models import ConsultaSQL, Ejecucion, EjecucionPaso
 
-# El paquete etl vive en la raíz del repositorio
+# Los paquetes etl y analytics viven en la raíz del repositorio
 if str(settings.PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(settings.PROJECT_ROOT))
 
+from analytics import mercado, modelo  # noqa: E402
 from etl.load_raw import load_all  # noqa: E402
 
 CAPA_POR_PREFIJO = {
@@ -23,6 +26,7 @@ CAPA_POR_PREFIJO = {
     "1": ConsultaSQL.Capa.STAGING,
     "2": ConsultaSQL.Capa.CORE,
     "3": ConsultaSQL.Capa.MART,
+    "4": ConsultaSQL.Capa.MART,
     "9": ConsultaSQL.Capa.CALIDAD,
 }
 
@@ -75,48 +79,59 @@ def objetos_creados(contenido: str) -> list[dict]:
 
 
 def ejecutar_pipeline(incluir_carga_csv: bool = False, origen: str = "web") -> Ejecucion:
-    """Ejecuta la carga de CSV (opcional) y todos los scripts en orden.
+    """Ejecuta el flujo completo, registrando cada paso:
 
-    Cada script corre en su propia transacción; el pipeline se detiene en el
-    primer error y lo registra.
+    1. Carga de CSV (opcional)          etl/load_raw.py
+    2. Precios de mercado (snapshot)    analytics/mercado.py
+    3. Scripts SQL en orden             sql/*.sql, cada uno en su propia transacción
+    4. Modelo analítico                 analytics/modelo.py
+
+    Se detiene en el primer error y lo registra.
     """
     consultas = sincronizar_consultas()
     ejecucion = Ejecucion.objects.create(incluye_carga_csv=incluir_carga_csv, origen=origen)
-    orden = 0
-
+    pasos = []
     if incluir_carga_csv:
-        inicio = time.perf_counter()
-        try:
-            cargados = load_all(settings.DATA_DIR)
-            detalle = "\n".join(f"{archivo} → {tabla}: {filas:,} filas" for archivo, tabla, filas in cargados)
-            exitoso = True
-        except Exception as exc:  # noqa: BLE001 - se registra en la ejecución
-            detalle, exitoso = str(exc), False
-        EjecucionPaso.objects.create(
-            ejecucion=ejecucion, nombre="Carga de CSV (etl/load_raw.py)", orden=orden,
-            exitoso=exitoso, duracion_s=time.perf_counter() - inicio, detalle=detalle,
-        )
-        orden += 1
-        if not exitoso:
-            return _finalizar(ejecucion, Ejecucion.Estado.FALLIDA)
-
+        pasos.append(("Carga de CSV (etl/load_raw.py)", None, _cargar_csv))
+    pasos.append(("Precios de mercado (analytics/mercado.py)", None,
+                  lambda: f"mercado.precios: {mercado.cargar():,} filas"))
     for consulta in consultas:
+        pasos.append((consulta.archivo, consulta, _ejecutor_sql(consulta)))
+    pasos.append(("Modelo analítico (analytics/modelo.py)", None, _ejecutar_modelo))
+
+    for orden, (nombre, consulta, funcion) in enumerate(pasos):
         inicio = time.perf_counter()
         try:
-            with transaction.atomic(), connection.cursor() as cursor:
-                cursor.execute(consulta.contenido)
-            detalle, exitoso = "", True
+            detalle, exitoso = funcion() or "", True
         except Exception as exc:  # noqa: BLE001 - se registra en la ejecución
             detalle, exitoso = str(exc), False
         EjecucionPaso.objects.create(
-            ejecucion=ejecucion, consulta=consulta, nombre=consulta.archivo, orden=orden,
+            ejecucion=ejecucion, consulta=consulta, nombre=nombre, orden=orden,
             exitoso=exitoso, duracion_s=time.perf_counter() - inicio, detalle=detalle,
         )
-        orden += 1
         if not exitoso:
             return _finalizar(ejecucion, Ejecucion.Estado.FALLIDA)
 
     return _finalizar(ejecucion, Ejecucion.Estado.EXITOSA)
+
+
+def _cargar_csv() -> str:
+    cargados = load_all(settings.DATA_DIR)
+    return "\n".join(f"{archivo} → {tabla}: {filas:,} filas" for archivo, tabla, filas in cargados)
+
+
+def _ejecutor_sql(consulta: ConsultaSQL):
+    def ejecutar():
+        with transaction.atomic(), connection.cursor() as cursor:
+            cursor.execute(consulta.contenido)
+    return ejecutar
+
+
+def _ejecutar_modelo() -> str:
+    salida = io.StringIO()
+    with contextlib.redirect_stdout(salida):
+        modelo.main()
+    return salida.getvalue().strip()
 
 
 def _finalizar(ejecucion: Ejecucion, estado: str) -> Ejecucion:

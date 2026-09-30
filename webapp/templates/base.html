@@ -15,6 +15,7 @@
       <nav aria-label="Principal">
         <a href="{% url 'portafolios:cliente' %}" {% if ruta.view_name == 'portafolios:cliente' %}aria-current="page"{% endif %}>Portafolio por cliente</a>
         <a href="{% url 'portafolios:cartera' %}" {% if ruta.view_name == 'portafolios:cartera' %}aria-current="page"{% endif %}>Cartera</a>
+        <a href="{% url 'portafolios:modelo' %}" {% if ruta.view_name == 'portafolios:modelo' %}aria-current="page"{% endif %}>Modelo de riesgo</a>
         <a href="{% url 'portafolios:calidad' %}" {% if ruta.view_name == 'portafolios:calidad' %}aria-current="page"{% endif %}>Calidad de datos</a>
         <a href="{% url 'pipeline:lista' %}" {% if ruta.namespace == 'pipeline' and ruta.url_name != 'explorar' %}aria-current="page"{% endif %}>Consultas SQL</a>
         <a href="{% url 'pipeline:explorar' %}" {% if ruta.view_name == 'pipeline:explorar' %}aria-current="page"{% endif %}>Explorar datos</a>
