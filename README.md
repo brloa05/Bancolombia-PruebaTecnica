@@ -10,16 +10,17 @@ modelo de **segmentación de clientes y coherencia perfil de riesgo vs. portafol
 ## Arquitectura
 
 ```
-data/*.csv ──(Python: etl/)──► PostgreSQL
-                                 ├─ raw      tablas 1:1 con cada CSV (todo TEXT)
-                                 ├─ staging  limpieza y tipado        (sql/)
-                                 ├─ core     dimensiones y hechos     (sql/)
-                                 ├─ mart     portafolio por cliente   (sql/)
-                                 └─ calidad  bitácora de reglas       (sql/)
-                                        │
-                        Django (gestión de queries + dashboard Plotly)
-                                        │
-                     analytics/ (datos de mercado + clustering)
+data/*.csv ─────(etl/load_raw.py)──────► PostgreSQL
+Yahoo Finance ─(analytics/mercado.py)──►   ├─ raw       tablas 1:1 con cada CSV (todo TEXT)
+  (snapshot versionado)                    ├─ mercado   precios diarios y TRM
+                                           ├─ staging   limpieza y tipado             (sql/1x)
+                                           ├─ core      dimensiones y hechos          (sql/2x)
+                                           ├─ mart      portafolios y riesgo          (sql/3x-4x)
+                                           ├─ calidad   bitácora de reglas            (sql/9x)
+                                           └─ analitica riesgo, perfil, segmentos y
+                                                        recomendaciones   (analytics/modelo.py)
+                                                  │
+                             Django: gestión de queries + dashboard Plotly (webapp/)
 ```
 
 ## Estructura del repositorio
@@ -29,7 +30,7 @@ data/*.csv ──(Python: etl/)──► PostgreSQL
 | `etl/` | Carga automática de los CSV a PostgreSQL |
 | `sql/` | Queries de limpieza, transformación y consolidación |
 | `webapp/` | Aplicación Django: gestión de queries y dashboard de portafolios |
-| `analytics/` | Datos de mercado y modelo analítico |
+| `analytics/` | Datos de mercado (con snapshot en `analytics/datos/`) y modelo analítico |
 | `data/` | CSV suministrados — **no versionados** |
 
 ## Requisitos
@@ -53,22 +54,22 @@ pip install -r requirements.txt
 
 # 4. Copiar los CSV suministrados en ./data
 
-# 5. Cargar los CSV a PostgreSQL (esquema raw)
-python etl/load_raw.py
-
-# 6. Ejecutar el pipeline SQL (staging → core → mart → calidad)
-python etl/run_pipeline.py
-
-# 7. Aplicación web
+# 5. Aplicación web y flujo completo
 cd webapp
 python manage.py migrate
-python manage.py runserver        # http://127.0.0.1:8000
+python manage.py ejecutar_pipeline --carga-csv   # CSV → mercado → SQL → modelo (~8 s)
+python manage.py runserver                       # http://127.0.0.1:8000
 ```
 
-Los pasos 5 y 6 también se pueden ejecutar desde la aplicación (página *Consultas SQL*) o con
-`python manage.py ejecutar_pipeline --carga-csv`, que además registra la ejecución.
+El paso `ejecutar_pipeline` también se puede lanzar desde la aplicación (página *Consultas SQL*).
+Cada paso se puede correr por separado desde la raíz del repositorio:
 
-_El modelo analítico se documenta a medida que se construye._
+```bash
+python etl/load_raw.py            # CSV → esquema raw
+python -m analytics.mercado       # snapshot de precios → esquema mercado (--descargar lo actualiza desde Yahoo)
+python etl/run_pipeline.py        # sql/*.sql
+python -m analytics.modelo        # modelo → esquema analitica
+```
 
 ## 1. Carga de datos (`etl/load_raw.py`)
 
@@ -112,6 +113,7 @@ idempotente y tarda unos 2 segundos.
 | `22_core_aba_usd.sql` | core | Instrumentos clasificados y hecho por corte `core.aba_usd` |
 | `23_core_dim_cliente.sql` | core | Clientes de ambos portafolios, con recuperación de IDs truncados |
 | `30_mart_portafolios.sql` | mart | Portafolios en la última fecha, evolución y ficha resumen por cliente |
+| `40_mart_riesgo.sql` | mart | Mapeo de cada instrumento a su referencia de mercado, posiciones consolidadas en COP (con TRM) y variables por cliente para el modelo |
 | `90_calidad_datos.sql` | calidad | Bitácora de cuántas filas afectó cada regla |
 
 Vistas principales para la aplicación:
@@ -172,6 +174,7 @@ La aplicación solo **lee** las vistas `mart`: toda la transformación ocurre en
 |---|---|
 | **Portafolio por cliente** (`/`) | Selector de cliente; portafolio local (COP) e internacional (USD) en la **última fecha disponible** de cada uno; composición por macroactivo; evolución diaria local y por corte USD; aviso de ID truncado |
 | **Cartera** (`/cartera/`) | Totales de todos los clientes, distribución por banca y perfil de riesgo, tabla de clientes |
+| **Modelo de riesgo** (`/modelo/`) | Riesgo vs. perfil declarado, segmentos, riesgo cambiario, siguiente mejor acción y validación con precios de mercado |
 | **Calidad de datos** (`/calidad/`) | Bitácora de reglas del pipeline y cuántas filas afectó cada una |
 | **Consultas SQL** (`/consultas/`) | **Gestión de los queries**: scripts por capa con su descripción, SQL resaltado, vista previa de cada tabla o vista que crean, ejecución del pipeline e historial de ejecuciones con duración y errores por paso |
 | **Explorar datos** (`/consultas/explorar/`) | Consola SQL de solo lectura con consultas de ejemplo |
@@ -188,6 +191,61 @@ Decisiones:
   El color sigue a la clase de activo en todas las gráficas, con una paleta validada para
   daltonismo en modo claro y oscuro. Cada gráfica tiene su tabla equivalente.
 
-## Modelo analítico
+## 4. Modelo analítico (`analytics/`)
 
-_Pendiente._
+**Pregunta de negocio:** ¿el riesgo real del portafolio de cada cliente corresponde a su perfil de
+riesgo declarado, y qué acción comercial conviene en cada caso?
+
+### Datos de mercado
+
+`analytics/mercado.py` descarga de Yahoo Finance 12 meses de precios diarios (jun-2023 a may-2024)
+de 71 tickers y los guarda como snapshot versionado (`analytics/datos/precios_mercado.csv`), para que
+el modelo se pueda reproducir sin internet:
+
+- Las acciones de la BVC que tienen los clientes y el resto de las líquidas.
+- Las 27 acciones y ETF de EE. UU. de los portafolios USD.
+- ETF de referencia para fondos UCITS, bonos y notas estructuradas (ACWI, AGG, EMB, AOK–AOA, etc.).
+- La TRM (`USDCOP=X`).
+
+Se guardan el precio ajustado (retorno total, para el riesgo) y el precio publicado (para validar los saldos).
+
+### Hallazgos al cruzar los datos con el mercado
+
+| Hallazgo | Evidencia |
+|---|---|
+| **La fecha del archivo es la de ingestión (T+1).** El saldo del día D refleja el cierre de D-1 | La correlación entre la variación diaria del saldo y la del precio es ≤ 0,21 sin rezago (salvo CEMARGOS, que solo tiene 4 días) y sube a **0,49–0,89** con un día de rezago (8 de 9 acciones ≥ 0,70: ECOPETROL 0,78, ISA 0,78, PFCEMARGOS 0,89); la cantidad implícita da números enteros y estables (500 ECOPETROL, 1.000 PFCEMARGOS, 3.000 CELSIA) |
+| **Se confirma la corrección del catálogo 1115 → 1015** | El código 1015 replica a PFCEMARGOS (r = 0,89) |
+| **"Renta Variable sin código" es TERPEL** | Replica a TERPEL (r = 0,64) con 555 acciones constantes |
+| **El activo 1022 no se pudo identificar** | No replica ninguna acción de la BVC disponible; se usa el índice COLCAP como proxy |
+| **El portafolio internacional es el 87 % de la cartera** | Consolidado en COP con la TRM del corte: 39.200 M COP en total |
+| **Entre el 24 % y el 94 % del riesgo de los portafolios internacionales, medido en pesos, viene de la TRM** | Promedio del 63 % en los clientes con más del 50 % internacional |
+
+### Metodología
+
+1. **Referencia de mercado por instrumento** (`sql/40_mart_riesgo.sql`): el precio propio de cada acción o
+   ETF; un activo identificado por correlación (TERPEL); un ETF proxy para fondos, bonos y notas; o, para
+   FICs y CDT, la volatilidad observada de su propio saldo, excluyendo los días con aportes o retiros.
+2. **Riesgo**: volatilidad anual √(w'Σw) con la matriz de covarianzas de 12 meses. Se calcula dos veces:
+   - **En moneda original**: describe los activos elegidos y es la que se usa para el perfil.
+   - **En pesos, con la TRM**: se usa para el **VaR paramétrico 95 % a 1 día**.
+3. **Perfil implícito** por bandas de volatilidad (conservador ≤ 4 %, moderado ≤ 10 %, agresivo > 10 %) y
+   **coherencia** frente al perfil declarado.
+4. **Segmentación K-Means** sobre volatilidad, % renta variable, % renta fija, % liquidez, % internacional,
+   concentración (HHI) y tamaño (log). k se elige por silhouette (k = 3, silhouette 0,56).
+5. **Siguiente mejor acción** con reglas trazables: perfilamiento, adecuación, oportunidad por riesgo bajo,
+   excedente de liquidez, concentración, internacionalización y vencimientos en los próximos 90 días.
+
+### Resultados
+
+| | |
+|---|---|
+| **Perfil sin definir** | **15 de 30 clientes**, con **25.500 M COP (65 % de la cartera)**. Por regulación deben perfilarse antes de recibir recomendaciones: es la acción más urgente |
+| **Riesgo por encima del perfil** | 3 clientes "moderados" con portafolios agresivos (acciones locales o renta variable global) |
+| **Riesgo por debajo del perfil** | 7 clientes con perfil moderado o agresivo que solo tienen FICs vista: oportunidad comercial |
+| **Coherentes** | 5 clientes |
+| **Segmentos** | *Inversionista global diversificado* (12 clientes, 36.200 M COP), *Ahorrador en FICs vista* (11, 3.100 M COP) y *Accionista local* (7, volatilidad 32 %) |
+| **Recomendaciones** | 36 acciones, entre ellas la reinversión de una nota estructurada de UBS que vence el 6-jun-2024 (US$ 114.690) |
+
+**Limitaciones:** con 30 clientes el modelo es descriptivo, no predictivo; las bandas de volatilidad son un
+supuesto razonable, no la metodología oficial de perfilamiento; los proxies (ETF) aproximan fondos y bonos
+sin serie propia; los FICs y CDT se tratan como independientes del resto del portafolio.
