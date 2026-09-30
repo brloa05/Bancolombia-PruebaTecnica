@@ -1,0 +1,6 @@
+{% if figura %}
+  <div class="grafica" data-grafica="{{ id }}" role="img" aria-label="{{ etiqueta }}"></div>
+  <script type="application/json" id="{{ id }}">{{ figura|safe }}</script>
+{% else %}
+  <p class="vacio">Sin datos para graficar.</p>
+{% endif %}

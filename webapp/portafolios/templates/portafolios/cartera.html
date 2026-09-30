@@ -1,0 +1,99 @@
+{% extends "base.html" %}
+{% load formato %}
+
+{% block titulo %}Cartera · Analítica de Inversiones{% endblock %}
+
+{% block contenido %}
+<div class="encabezado">
+  <div>
+    <h1>Cartera</h1>
+    <p>Vista agregada de todos los clientes en su última fecha disponible.</p>
+  </div>
+</div>
+
+<div class="rejilla rejilla--tiles">
+  <div class="tarjeta">
+    <div class="tile__etiqueta">Clientes</div>
+    <div class="tile__valor">{{ clientes|length }}</div>
+    <div class="tile__detalle">{{ n_usd }} con portafolio internacional</div>
+  </div>
+  <div class="tarjeta">
+    <div class="tile__etiqueta">Portafolio local total</div>
+    <div class="tile__valor">{{ total_cop|millones }}</div>
+    <div class="tile__detalle">{{ total_cop|cop }}</div>
+  </div>
+  <div class="tarjeta">
+    <div class="tile__etiqueta">Portafolio internacional total</div>
+    <div class="tile__valor">{{ total_usd|usd }}</div>
+    <div class="tile__detalle">{{ n_usd }} clientes</div>
+  </div>
+  <div class="tarjeta">
+    <div class="tile__etiqueta">IDs truncados en origen</div>
+    <div class="tile__valor">{{ n_truncados }}</div>
+    <div class="tile__detalle">notación científica · no cruzables</div>
+  </div>
+</div>
+
+<section class="seccion">
+  <div class="rejilla rejilla--2">
+    <div class="tarjeta">
+      <div class="tarjeta__titulo"><h3>Portafolio local por banca</h3><span class="tarjeta__nota">millones de COP</span></div>
+      {% include "portafolios/_grafica.html" with figura=graficas.banca id="g-banca" etiqueta="Portafolio local por banca" %}
+      <details class="tabla-vista">
+        <summary>Ver tabla</summary>
+        <table>
+          <thead><tr><th>Banca</th><th class="num">Clientes</th><th class="num">Local (COP)</th><th class="num">Internacional (US$)</th></tr></thead>
+          <tbody>{% for f in por_banca %}<tr><td>{{ f.grupo }}</td><td class="num">{{ f.clientes }}</td><td class="num">{{ f.total_cop|cop }}</td><td class="num">{{ f.total_usd|usd }}</td></tr>{% endfor %}</tbody>
+        </table>
+      </details>
+    </div>
+    <div class="tarjeta">
+      <div class="tarjeta__titulo"><h3>Portafolio local por perfil de riesgo</h3><span class="tarjeta__nota">millones de COP</span></div>
+      {% include "portafolios/_grafica.html" with figura=graficas.perfil id="g-perfil" etiqueta="Portafolio local por perfil de riesgo" %}
+      <details class="tabla-vista">
+        <summary>Ver tabla</summary>
+        <table>
+          <thead><tr><th>Perfil</th><th class="num">Clientes</th><th class="num">Local (COP)</th><th class="num">Internacional (US$)</th></tr></thead>
+          <tbody>{% for f in por_perfil %}<tr><td>{{ f.grupo|title }}</td><td class="num">{{ f.clientes }}</td><td class="num">{{ f.total_cop|cop }}</td><td class="num">{{ f.total_usd|usd }}</td></tr>{% endfor %}</tbody>
+        </table>
+      </details>
+    </div>
+  </div>
+</section>
+
+<section class="seccion">
+  <h2>Clientes</h2>
+  <div class="tarjeta tabla-scroll">
+    <table>
+      <thead>
+        <tr>
+          <th>Cliente</th><th>Banca</th><th>Perfil</th>
+          <th class="num">Local (COP)</th><th class="num">% RV</th><th class="num">% RF</th><th class="num">% FICs</th>
+          <th class="num">Internacional (US$)</th><th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for c in clientes %}
+        <tr>
+          <td><a class="mono" href="{% url 'portafolios:cliente' %}?cliente={{ c.id_cliente|urlencode }}">{{ c.id_cliente }}</a></td>
+          <td>{{ c.banca|default:"—" }}</td>
+          <td>{{ c.perfil_riesgo|default:"—"|title }}</td>
+          <td class="num">{{ c.total_cop|cop }}</td>
+          <td class="num">{{ c.pct_renta_variable|pct:0 }}</td>
+          <td class="num">{{ c.pct_renta_fija|pct:0 }}</td>
+          <td class="num">{{ c.pct_fics|pct:0 }}</td>
+          <td class="num">{{ c.total_usd|usd }}</td>
+          <td>{% if c.id_truncado %}<span class="etiqueta etiqueta--alerta">⚠ ID truncado</span>{% endif %}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endblock %}
+
+{% block scripts %}
+{% load static %}
+<script src="{% url 'portafolios:plotly_js' %}"></script>
+<script src="{% static 'js/graficas.js' %}"></script>
+{% endblock %}

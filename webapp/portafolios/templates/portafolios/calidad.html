@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% load formato %}
+
+{% block titulo %}Calidad de datos · Analítica de Inversiones{% endblock %}
+
+{% block contenido %}
+<div class="encabezado">
+  <div>
+    <h1>Calidad de datos</h1>
+    <p>Cada regla del pipeline SQL y cuántas filas afectó. Cada fila de origen conserva su trazabilidad
+       en <span class="mono">core.aba_local_trazabilidad</span> y <span class="mono">staging.aba_usd_internacional</span>.</p>
+  </div>
+</div>
+
+<div class="rejilla rejilla--2">
+  {% for v in volumen %}
+  <div class="tarjeta">
+    <div class="tile__etiqueta mono">{{ v.tabla_origen }}</div>
+    <div class="tile__valor">{{ v.filas_validas|numero }} <span class="tile__detalle">de {{ v.filas_origen|numero }} filas válidas</span></div>
+    <div class="tile__detalle">{{ v.filas_descartadas|numero }} descartadas · {{ v.filas_modelo_final|numero }} filas en el modelo final</div>
+  </div>
+  {% endfor %}
+</div>
+
+<section class="seccion">
+  <h2>Bitácora de reglas</h2>
+  <div class="tarjeta tabla-scroll">
+    <table>
+      <thead><tr><th>Origen</th><th>Acción</th><th>Regla</th><th class="num">Filas</th><th>Descripción</th></tr></thead>
+      <tbody>
+        {% for b in bitacora %}
+        <tr>
+          <td class="mono">{{ b.tabla_origen }}</td>
+          <td>
+            {% if b.accion == 'descartado' %}<span class="etiqueta etiqueta--error">✕ Descartado</span>
+            {% elif b.accion == 'corregido' %}<span class="etiqueta etiqueta--ok">✓ Corregido</span>
+            {% elif b.accion == 'imputado' %}<span class="etiqueta etiqueta--info">↻ Imputado</span>
+            {% else %}<span class="etiqueta">ⓘ Informativo</span>{% endif %}
+          </td>
+          <td class="mono">{{ b.regla }}</td>
+          <td class="num">{{ b.filas|numero }}</td>
+          <td>{{ b.descripcion }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endblock %}

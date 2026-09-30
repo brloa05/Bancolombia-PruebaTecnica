@@ -1,0 +1,144 @@
+{% extends "base.html" %}
+{% load formato %}
+
+{% block titulo %}Portafolio {{ resumen.id_cliente }} · Analítica de Inversiones{% endblock %}
+
+{% block contenido %}
+<div class="encabezado">
+  <div>
+    <h1>Portafolio por cliente</h1>
+    <p>Posiciones local (COP) e internacional (USD) de cada cliente en su última fecha disponible.</p>
+  </div>
+  <form method="get" class="filtro">
+    <label for="cliente">Cliente</label>
+    <select id="cliente" name="cliente" onchange="this.form.submit()">
+      {% for c in clientes %}
+        <option value="{{ c.id_cliente }}" {% if c.id_cliente == resumen.id_cliente %}selected{% endif %}>
+          {{ c.id_cliente }} — {{ c.banca|default:"Sin banca" }} · {{ c.perfil_riesgo|default:"Sin perfil"|title }}
+        </option>
+      {% endfor %}
+    </select>
+    <noscript><button type="submit">Ver</button></noscript>
+  </form>
+</div>
+
+{% if resumen.id_truncado %}
+<div class="aviso aviso--alerta" role="note">
+  <span class="aviso__icono" aria-hidden="true">⚠</span>
+  <span>
+    <b>ID truncado en el origen.</b>
+    El identificador llegó en notación científica y perdió dígitos, así que no se puede cruzar con otros sistemas.
+    {% if resumen.id_cliente_completo %}Se recuperó el ID completo <b class="mono">{{ resumen.id_cliente_completo }}</b> a partir de una fila con el dato íntegro.{% endif %}
+    {% if resumen.cliente_separado %}Este ID mezclaba dos clientes con perfiles de riesgo distintos y se separó en dos.{% endif %}
+  </span>
+</div>
+{% endif %}
+
+<div class="rejilla rejilla--tiles">
+  <div class="tarjeta">
+    <div class="tile__etiqueta">Portafolio local</div>
+    <div class="tile__valor">{{ resumen.total_cop|millones }}</div>
+    <div class="tile__detalle">{{ resumen.total_cop|cop }} · corte {{ resumen.fecha_corte_local|date:"Y-m-d"|default:"—" }}</div>
+  </div>
+  <div class="tarjeta">
+    <div class="tile__etiqueta">Portafolio internacional</div>
+    <div class="tile__valor">{{ resumen.total_usd|usd }}</div>
+    <div class="tile__detalle">{% if resumen.fecha_corte_usd %}corte {{ resumen.fecha_corte_usd|date:"Y-m-d" }}{% else %}Sin portafolio internacional{% endif %}</div>
+  </div>
+  <div class="tarjeta">
+    <div class="tile__etiqueta">Perfil de riesgo</div>
+    <div class="tile__valor tile__valor--texto">{{ resumen.perfil_riesgo|default:"—"|title }}</div>
+    <div class="tile__detalle">Banca {{ resumen.banca|default:"—" }}</div>
+  </div>
+  <div class="tarjeta">
+    <div class="tile__etiqueta">Posiciones</div>
+    <div class="tile__valor">{{ resumen.n_activos_local|default:0 }} + {{ resumen.n_instrumentos_usd|default:0 }}</div>
+    <div class="tile__detalle">activos locales + instrumentos USD</div>
+  </div>
+</div>
+
+<div class="tarjeta" style="margin-top:16px">
+  <div class="tarjeta__titulo">
+    <h3>Composición del portafolio local por macroactivo</h3>
+  </div>
+  <div class="composicion" role="img" aria-label="Composición por macroactivo">
+    {% for m in composicion %}{% if m.pct %}<span style="flex: {{ m.pct|floatformat:'4u' }} 1 0; background: {{ m.color }}" title="{{ m.nombre }} {{ m.pct|pct }}"></span>{% endif %}{% endfor %}
+  </div>
+  <div class="leyenda">
+    {% for m in composicion %}<span><i style="background: {{ m.color }}"></i>{{ m.nombre }} <b>{{ m.pct|pct }}</b></span>{% endfor %}
+  </div>
+</div>
+
+<section class="seccion">
+  <h2>Portafolio local (COP) <span class="seccion__sub">corte {{ resumen.fecha_corte_local|date:"Y-m-d" }}</span></h2>
+  <div class="tarjeta">
+    {% include "portafolios/_grafica.html" with figura=graficas.local id="g-local" etiqueta="Saldo por activo del portafolio local" %}
+    <details class="tabla-vista">
+      <summary>Ver tabla</summary>
+      <div class="tabla-scroll">
+        <table>
+          <thead><tr><th>Activo</th><th>Código</th><th>Macroactivo</th><th class="num">Saldo (COP)</th><th class="num">Participación</th></tr></thead>
+          <tbody>
+            {% for f in local %}
+              <tr><td>{{ f.activo }}</td><td class="mono">{{ f.cod_activo }}</td><td>{{ f.macroactivo }}</td><td class="num">{{ f.saldo_cop|cop }}</td><td class="num">{{ f.participacion|pct }}</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </details>
+  </div>
+</section>
+
+<section class="seccion">
+  <h2>Portafolio internacional (USD){% if usd %} <span class="seccion__sub">corte {{ resumen.fecha_corte_usd|date:"Y-m-d" }}</span>{% endif %}</h2>
+  <div class="tarjeta">
+    {% if usd %}
+      {% include "portafolios/_grafica.html" with figura=graficas.usd id="g-usd" etiqueta="Valor de mercado por instrumento del portafolio internacional" %}
+      <details class="tabla-vista">
+        <summary>Ver tabla ({{ usd|length }} instrumentos)</summary>
+        <div class="tabla-scroll">
+          <table>
+            <thead><tr><th>Instrumento</th><th>Símbolo</th><th>Clase</th><th>Tipo</th><th class="num">Cantidad</th><th class="num">Valor (US$)</th><th class="num">Participación</th><th>Vencimiento</th><th class="num">Cupón</th></tr></thead>
+            <tbody>
+              {% for f in usd %}
+                <tr>
+                  <td>{{ f.nombre }}</td><td class="mono">{{ f.simbolo|default:"—" }}</td><td>{{ f.clase_activo }}</td><td>{{ f.tipo_instrumento }}</td>
+                  <td class="num">{{ f.cantidad|numero:2 }}</td><td class="num">{{ f.valor_mercado_usd|usd }}</td><td class="num">{{ f.participacion|pct }}</td>
+                  <td>{{ f.fecha_vencimiento|date:"Y-m-d"|default:"—" }}</td><td class="num">{% if f.tasa_cupon %}{{ f.tasa_cupon|numero:3 }} %{% else %}—{% endif %}</td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </details>
+    {% else %}
+      <p class="vacio">Este cliente no tiene portafolio internacional.</p>
+    {% endif %}
+  </div>
+</section>
+
+<section class="seccion">
+  <h2>Evolución</h2>
+  <div class="rejilla rejilla--2">
+    <div class="tarjeta">
+      <div class="tarjeta__titulo"><h3>Portafolio local · diario</h3><span class="tarjeta__nota">COP, por macroactivo</span></div>
+      {% include "portafolios/_grafica.html" with figura=graficas.evolucion_local id="g-evo-local" etiqueta="Evolución diaria del portafolio local" %}
+    </div>
+    <div class="tarjeta">
+      <div class="tarjeta__titulo"><h3>Portafolio internacional · por corte</h3><span class="tarjeta__nota">US$, por clase de activo</span></div>
+      {% if graficas.evolucion_usd %}
+        {% include "portafolios/_grafica.html" with figura=graficas.evolucion_usd id="g-evo-usd" etiqueta="Evolución por corte del portafolio internacional" %}
+        <p class="tarjeta__nota">El corte de marzo trae varias valoraciones sin fecha; se muestra su promedio.</p>
+      {% else %}
+        <p class="vacio">Sin portafolio internacional.</p>
+      {% endif %}
+    </div>
+  </div>
+</section>
+{% endblock %}
+
+{% block scripts %}
+{% load static %}
+<script src="{% url 'portafolios:plotly_js' %}"></script>
+<script src="{% static 'js/graficas.js' %}"></script>
+{% endblock %}
