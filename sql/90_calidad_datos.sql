@@ -36,6 +36,8 @@ INSERT INTO calidad.reglas (regla, accion, descripcion) VALUES
     ('perfil_sin_dato_a_sin_definir',               'imputado',    'Cliente sin ningún perfil informado: se asigna SIN DEFINIR (1466)'),
     ('banca_imputada_del_cliente',                  'imputado',    'Banca vacía: se toma la más frecuente del cliente'),
     ('aba_imputado_ultimo_valor_conocido',          'imputado',    'Saldo (ABA) vacío: se toma el último valor conocido de la serie'),
+    ('aba_error_escala_corregido',                  'corregido',   'Saldo de un solo día multiplicado por un factor exacto (×2 posición duplicada, ×0,1 o ×0,01 coma corrida) frente a sus vecinos: se corrige la escala'),
+    ('aba_salto_transitorio_imputado',              'imputado',    'Saldo de un solo día que se aparta más de 50 % de dos vecinos coherentes, sin factor exacto: se toma el del día anterior'),
     ('duplicado',                                   'descartado',  'Registro repetido para el mismo cliente, fecha y activo'),
     ('duplicado_valor_atipico',                     'descartado',  'Registro repetido con saldo distinto: se conserva el más cercano a la mediana de la serie'),
     ('cliente_no_identificable',                    'descartado',  'No fue posible determinar el cliente'),
@@ -99,8 +101,10 @@ JOIN calidad.reglas r USING (regla)
 WHERE x.filas > 0;
 
 
--- Resumen de volumen: filas de origen vs. filas finales
-CREATE VIEW calidad.resumen_volumen AS
+-- Resumen de volumen: filas de origen vs. filas finales.
+-- Es una tabla (foto al final del pipeline) y no una vista, para que recargar
+-- el esquema raw no dependa de objetos de capas posteriores.
+CREATE TABLE calidad.resumen_volumen AS
 SELECT 'historico_aba_macroactivos' AS tabla_origen,
        (SELECT count(*) FROM raw.historico_aba_macroactivos)                              AS filas_origen,
        (SELECT count(*) FROM core.aba_local_trazabilidad WHERE motivo_descarte IS NULL)   AS filas_validas,

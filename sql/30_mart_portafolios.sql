@@ -58,9 +58,11 @@ FROM core.aba_local
 GROUP BY id_cliente, fecha, macroactivo;
 
 
--- Evolución por corte del portafolio internacional por clase de activo
+-- Evolución por corte del portafolio internacional por clase de activo.
+-- es_promedio marca los cortes consolidados a partir de varias valoraciones.
 CREATE VIEW mart.evolucion_usd AS
-SELECT a.id_cliente, a.fecha_corte, i.clase_activo, sum(a.valor_mercado_usd) AS valor_mercado_usd
+SELECT a.id_cliente, a.fecha_corte, i.clase_activo, sum(a.valor_mercado_usd) AS valor_mercado_usd,
+       bool_or(a.n_observaciones > 1) AS es_promedio
 FROM core.aba_usd a
 JOIN core.dim_instrumento_usd i USING (id_instrumento)
 GROUP BY a.id_cliente, a.fecha_corte, i.clase_activo;

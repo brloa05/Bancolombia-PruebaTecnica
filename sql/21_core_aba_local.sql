@@ -19,7 +19,10 @@
 --   E. Separación de IDs truncados que mezclan clientes con perfiles distintos.
 --   F. Perfil y banca faltantes: moda de la serie, luego del cliente.
 --   G. ABA faltante: último valor conocido de la serie.
---   H. Hecho diario core.aba_local (una fila por cliente, fecha y activo).
+--   H. Saltos de un solo día (el día se aparta > 50 % de dos vecinos que
+--      coinciden entre sí): si el salto es un factor exacto (×2, ×0,1, …) es un
+--      error de escala y se corrige; si no, se toma el valor del día anterior.
+--   I. Hecho diario core.aba_local (una fila por cliente, fecha y activo).
 -- =============================================================================
 
 CREATE TABLE core.aba_local_trazabilidad AS
@@ -34,6 +37,7 @@ SELECT
     macroactivo,
     cod_activo,
     aba,
+    aba AS aba_origen,
     cod_perfil_riesgo,
     cod_banca,
     correcciones,
@@ -351,7 +355,47 @@ SET motivo_descarte = 'aba_sin_valor'
 WHERE motivo_descarte IS NULL AND aba IS NULL;
 
 -- ---------------------------------------------------------------------------
--- H. Hecho diario: una fila por (cliente, fecha, activo)
+-- H. Saltos transitorios de un día
+--    Evidencia: los CDT de un cliente valen exactamente el doble tres días
+--    aislados (posición sumada dos veces) y dos fondos tienen un día con la coma
+--    decimal corrida (×0,1 y ×0,01). Los vecinos coinciden entre sí (< 5 %), así
+--    que el día atípico es el error, no un movimiento real del portafolio.
+-- ---------------------------------------------------------------------------
+WITH vecinos AS (
+    SELECT _source_row, aba,
+           lag(aba)  OVER w AS previo,
+           lead(aba) OVER w AS siguiente
+    FROM core.aba_local_trazabilidad
+    WHERE motivo_descarte IS NULL
+    WINDOW w AS (PARTITION BY id_cliente, cod_activo ORDER BY fecha)
+),
+atipicos AS (
+    SELECT _source_row, previo, aba / ((previo + siguiente) / 2) AS razon
+    FROM vecinos
+    WHERE previo > 0 AND siguiente > 0
+      AND abs(previo - siguiente) / previo < 0.05
+      AND (aba / ((previo + siguiente) / 2) > 1.5 OR aba / ((previo + siguiente) / 2) < 0.67)
+),
+con_factor AS (
+    SELECT a.*, f.factor
+    FROM atipicos a
+    LEFT JOIN LATERAL (
+        SELECT x AS factor
+        FROM unnest(ARRAY[2, 10, 100, 0.5, 0.1, 0.01]::NUMERIC[]) AS x
+        WHERE abs(a.razon / x - 1) < 0.02
+        LIMIT 1
+    ) f ON TRUE
+)
+UPDATE core.aba_local_trazabilidad t
+SET aba          = CASE WHEN c.factor IS NOT NULL THEN round(t.aba / c.factor, 2) ELSE c.previo END,
+    correcciones = t.correcciones || CASE WHEN c.factor IS NOT NULL
+                                          THEN 'aba_error_escala_corregido'
+                                          ELSE 'aba_salto_transitorio_imputado' END
+FROM con_factor c
+WHERE c._source_row = t._source_row;
+
+-- ---------------------------------------------------------------------------
+-- I. Hecho diario: una fila por (cliente, fecha, activo)
 --    Tras las imputaciones todas las series quedan completas en su rango; las
 --    que terminan antes del último corte son activos que el cliente ya no tiene
 --    (p. ej. los fondos cerrados), no datos faltantes.
