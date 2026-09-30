@@ -23,3 +23,6 @@ media/
 .idea/
 .DS_Store
 Thumbs.db
+
+# Excepción: snapshot de precios de mercado (datos públicos, necesarios para reproducir el modelo)
+!analytics/datos/*.csv
