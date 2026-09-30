@@ -35,8 +35,11 @@ tipo AS (
             WHEN cusip = 'USD999997'        THEN 'Efectivo'
             WHEN cusip = 'MONEYMRKT'        THEN 'Fondo money market'
             WHEN isin ~ '^(LU|IE)'          THEN 'Fondo mutuo (UCITS)'
-            WHEN isin ~ '^CH'               THEN 'Nota estructurada'
+            -- notas ligadas a índices (autocall, twin-win), aunque tengan ISIN XS
+            WHEN isin ~ '^CH' OR nombre ~* '\m(LKD|LNKD|LINKED|AUTOCALL|TWIN)' THEN 'Nota estructurada'
             WHEN fecha_vencimiento IS NOT NULL THEN 'Bono'
+            -- ETF sin vencimiento que invierte en bonos (p. ej. VGSH, Tesoros de corto plazo)
+            WHEN nombre ~* '\m(TREAS|TREASURY|BOND|BD)\M' THEN 'ETF de renta fija'
             ELSE 'Acción / ETF'
         END AS tipo_instrumento
     FROM base b
@@ -49,6 +52,7 @@ SELECT
         WHEN 'Fondo mutuo (UCITS)' THEN 'Fondos'
         WHEN 'Nota estructurada'   THEN 'Estructurados'
         WHEN 'Bono'                THEN 'Renta Fija'
+        WHEN 'ETF de renta fija'   THEN 'Renta Fija'
         ELSE 'Renta Variable'
     END AS clase_activo,
     left(isin, 2) AS pais_isin
