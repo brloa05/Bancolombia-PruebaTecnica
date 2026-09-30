@@ -28,6 +28,7 @@ data/*.csv ──(Python: etl/)──► PostgreSQL
 |---|---|
 | `etl/` | Carga automática de los CSV a PostgreSQL |
 | `sql/` | Queries de limpieza, transformación y consolidación |
+| `webapp/` | Aplicación Django: gestión de queries y dashboard de portafolios |
 | `analytics/` | Datos de mercado y modelo analítico |
 | `data/` | CSV suministrados — **no versionados** |
 
@@ -57,9 +58,17 @@ python etl/load_raw.py
 
 # 6. Ejecutar el pipeline SQL (staging → core → mart → calidad)
 python etl/run_pipeline.py
+
+# 7. Aplicación web
+cd webapp
+python manage.py migrate
+python manage.py runserver        # http://127.0.0.1:8000
 ```
 
-_Los siguientes pasos (aplicación y modelo) se documentan a medida que se construyen._
+Los pasos 5 y 6 también se pueden ejecutar desde la aplicación (página *Consultas SQL*) o con
+`python manage.py ejecutar_pipeline --carga-csv`, que además registra la ejecución.
+
+_El modelo analítico se documenta a medida que se construye._
 
 ## 1. Carga de datos (`etl/load_raw.py`)
 
@@ -130,6 +139,7 @@ El detalle está en `calidad.bitacora` y `calidad.resumen_volumen`.
 | **Duplicados** (797 filas) | Series completas repetidas (224 filas en 112 días); 1 caso con saldo 9,8 veces mayor | Se conserva el valor más cercano a la mediana de la serie |
 | **Campos faltantes** (cliente, fecha, código, perfil, banca, saldo) | `None`, vacíos o `100` como ID | Imputación por **coincidencia exacta** (la fila es un duplicado dañado) o por **hueco único** en una serie; perfil y banca, de la moda del cliente; saldo, del último valor conocido |
 | **Series sin código de activo** (227 filas) | Dos clientes tienen una serie diaria completa sin código | Activo sintético "FICs / Renta Variable sin código" |
+| **Saltos de un solo día** (9 filas) | Los CDT de un cliente valen **exactamente el doble** tres días aislados (posición sumada dos veces); dos fondos tienen un día con la coma decimal corrida (×0,1 y ×0,01). Los días vecinos coinciden entre sí | Si el salto es un factor exacto se corrige la escala; si no, se toma el valor del día anterior. El valor original queda en `aba_origen`. Los cambios de nivel que persisten (p. ej. un fondo cerrado que vence y se traslada a Fiducuenta) son movimientos reales y no se tocan |
 | **Mes de ingestión vacío** (4 filas) | La columna `month` del periodo sí lo trae | Se toma del periodo |
 
 El resultado son **30 clientes** y **56 series** activo-cliente **completas**, con una foto diaria de
@@ -153,6 +163,30 @@ Los instrumentos se clasifican en **Renta Fija** (bonos), **Renta Variable** (ac
 - `catalogo_activos`: PFCEMARGOS figura como `1115`, pero en los datos aparece como `1015`
   (error de digitación). CEMARGOS aparece con dos códigos (`1003` y `1013`). El código `1022`
   aparece en los datos pero no en el catálogo.
+
+## 3. Aplicación Django (`webapp/`)
+
+La aplicación solo **lee** las vistas `mart`: toda la transformación ocurre en SQL.
+
+| Página | Qué muestra |
+|---|---|
+| **Portafolio por cliente** (`/`) | Selector de cliente; portafolio local (COP) e internacional (USD) en la **última fecha disponible** de cada uno; composición por macroactivo; evolución diaria local y por corte USD; aviso de ID truncado |
+| **Cartera** (`/cartera/`) | Totales de todos los clientes, distribución por banca y perfil de riesgo, tabla de clientes |
+| **Calidad de datos** (`/calidad/`) | Bitácora de reglas del pipeline y cuántas filas afectó cada una |
+| **Consultas SQL** (`/consultas/`) | **Gestión de los queries**: scripts por capa con su descripción, SQL resaltado, vista previa de cada tabla o vista que crean, ejecución del pipeline e historial de ejecuciones con duración y errores por paso |
+| **Explorar datos** (`/consultas/explorar/`) | Consola SQL de solo lectura con consultas de ejemplo |
+
+Decisiones:
+
+- **Los archivos de `sql/` son la fuente de verdad.** La app los sincroniza en el modelo
+  `ConsultaSQL` y registra cada corrida en `Ejecucion`/`EjecucionPaso`. Así no hay dos
+  versiones de un mismo query.
+- **Consola segura:** una sola sentencia `SELECT`/`WITH`, dentro de una transacción `READ ONLY`,
+  con límite de 5 s y 500 filas.
+- **Visualización (Plotly):** las figuras se construyen en el servidor (`portafolios/graficas.py`)
+  y `plotly.js` se sirve desde el paquete de Python, así que el dashboard funciona sin internet.
+  El color sigue a la clase de activo en todas las gráficas, con una paleta validada para
+  daltonismo en modo claro y oscuro. Cada gráfica tiene su tabla equivalente.
 
 ## Modelo analítico
 
