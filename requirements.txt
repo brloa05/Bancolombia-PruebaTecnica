@@ -10,3 +10,6 @@ plotly==6.*
 # Modelo analítico
 scikit-learn==1.7.*
 yfinance==0.2.*
+
+# Asistente con IA (opcional)
+anthropic>=1.10,<2
