@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+
+{% block titulo %}Ejecución {{ ejecucion.pk }} · Consultas SQL{% endblock %}
+
+{% block contenido %}
+<p><a href="{% url 'pipeline:lista' %}">← Consultas SQL</a></p>
+<div class="encabezado">
+  <div>
+    <h1>Ejecución {{ ejecucion.pk }}
+      {% if ejecucion.estado == 'exitosa' %}<span class="etiqueta etiqueta--ok">✓ Exitosa</span>{% elif ejecucion.estado == 'fallida' %}<span class="etiqueta etiqueta--error">✕ Fallida</span>{% endif %}
+    </h1>
+    <p>{{ ejecucion.iniciada|date:"Y-m-d H:i:s" }} · origen {{ ejecucion.origen }}{% if ejecucion.duracion_s is not None %} · {{ ejecucion.duracion_s|floatformat:2 }} s{% endif %}</p>
+  </div>
+</div>
+
+<div class="tarjeta tabla-scroll">
+  <table>
+    <thead><tr><th>#</th><th>Paso</th><th>Estado</th><th class="num">Duración</th><th>Detalle</th></tr></thead>
+    <tbody>
+      {% for p in ejecucion.pasos.all %}
+      <tr>
+        <td>{{ p.orden }}</td>
+        <td class="mono">{% if p.consulta %}<a href="{% url 'pipeline:detalle' p.consulta.pk %}">{{ p.nombre }}</a>{% else %}{{ p.nombre }}{% endif %}</td>
+        <td>{% if p.exitoso %}<span class="etiqueta etiqueta--ok">✓ OK</span>{% else %}<span class="etiqueta etiqueta--error">✕ Error</span>{% endif %}</td>
+        <td class="num">{{ p.duracion_s|floatformat:2 }} s</td>
+        <td>{% if p.detalle %}<pre class="codigo" style="max-height:200px">{{ p.detalle }}</pre>{% endif %}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

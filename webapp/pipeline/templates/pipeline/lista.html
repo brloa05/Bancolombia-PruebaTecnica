@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+
+{% block titulo %}Consultas SQL · Analítica de Inversiones{% endblock %}
+
+{% block contenido %}
+<div class="encabezado">
+  <div>
+    <h1>Consultas SQL del pipeline</h1>
+    <p>Los scripts de <span class="mono">sql/</span> limpian, transforman y consolidan los datos. Se ejecutan en orden,
+       cada uno en su propia transacción. El repositorio es la fuente de verdad: esta página se sincroniza con los archivos.</p>
+  </div>
+</div>
+
+<div class="rejilla rejilla--2">
+  <div class="tarjeta">
+    <h2>Ejecutar pipeline</h2>
+    <p class="tarjeta__nota">Reconstruye los esquemas staging, core, mart y calidad (≈ 4 s).</p>
+    <form method="post" action="{% url 'pipeline:ejecutar' %}" class="acciones">
+      {% csrf_token %}
+      <label class="check"><input type="checkbox" name="carga_csv" value="1"> Recargar antes los CSV de <span class="mono">data/</span></label>
+      <button type="submit">▶ Ejecutar</button>
+    </form>
+  </div>
+  <div class="tarjeta">
+    <h2>Últimas ejecuciones</h2>
+    {% if ejecuciones %}
+    <table>
+      <thead><tr><th>#</th><th>Inicio</th><th>Estado</th><th class="num">Duración</th><th>Origen</th></tr></thead>
+      <tbody>
+        {% for e in ejecuciones %}
+        <tr>
+          <td><a href="{% url 'pipeline:ejecucion' e.pk %}">{{ e.pk }}</a></td>
+          <td>{{ e.iniciada|date:"Y-m-d H:i:s" }}</td>
+          <td>{% if e.estado == 'exitosa' %}<span class="etiqueta etiqueta--ok">✓ Exitosa</span>{% elif e.estado == 'fallida' %}<span class="etiqueta etiqueta--error">✕ Fallida</span>{% else %}<span class="etiqueta">En curso</span>{% endif %}</td>
+          <td class="num">{% if e.duracion_s is not None %}{{ e.duracion_s|floatformat:1 }} s{% else %}—{% endif %}</td>
+          <td>{{ e.origen }}{% if e.incluye_carga_csv %} · CSV{% endif %}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+      <p class="vacio">Todavía no hay ejecuciones registradas.</p>
+    {% endif %}
+  </div>
+</div>
+
+{% regroup consultas by get_capa_display as capas %}
+{% for capa in capas %}
+<section class="capa">
+  <h2>{{ capa.grouper }} <span class="etiqueta">{{ capa.list|length }}</span></h2>
+  <div class="lista-consultas">
+    {% for c in capa.list %}
+    <article class="tarjeta consulta">
+      <div>
+        <h3><a href="{% url 'pipeline:detalle' c.pk %}">{{ c.titulo }}</a></h3>
+        <div class="consulta__archivo">{{ c.archivo }}</div>
+      </div>
+      <div><a class="boton boton--sec" href="{% url 'pipeline:detalle' c.pk %}">Ver SQL y resultado</a></div>
+      {% if c.descripcion %}<p class="consulta__desc">{{ c.descripcion|truncatechars:420 }}</p>{% endif %}
+      {% if c.objetos %}
+      <div class="consulta__objetos">
+        {% for o in c.objetos %}<a class="etiqueta etiqueta--info mono" href="{% url 'pipeline:detalle' c.pk %}?objeto={{ o.nombre }}">{{ o.tipo|lower }} {{ o.nombre }}</a>{% endfor %}
+      </div>
+      {% endif %}
+    </article>
+    {% endfor %}
+  </div>
+</section>
+{% endfor %}
+{% endblock %}

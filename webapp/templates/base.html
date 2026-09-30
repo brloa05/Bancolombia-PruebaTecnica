@@ -1,0 +1,39 @@
+{% load static %}<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block titulo %}Analítica de Inversiones{% endblock %}</title>
+  <link rel="stylesheet" href="{% static 'css/app.css' %}">
+  {% block cabecera %}{% endblock %}
+</head>
+<body>
+  {% with ruta=request.resolver_match %}
+  <header class="barra">
+    <div class="barra__contenido">
+      <a class="barra__marca" href="{% url 'portafolios:cliente' %}">Analítica de Inversiones <span>· Estructuración</span></a>
+      <nav aria-label="Principal">
+        <a href="{% url 'portafolios:cliente' %}" {% if ruta.view_name == 'portafolios:cliente' %}aria-current="page"{% endif %}>Portafolio por cliente</a>
+        <a href="{% url 'portafolios:cartera' %}" {% if ruta.view_name == 'portafolios:cartera' %}aria-current="page"{% endif %}>Cartera</a>
+        <a href="{% url 'portafolios:calidad' %}" {% if ruta.view_name == 'portafolios:calidad' %}aria-current="page"{% endif %}>Calidad de datos</a>
+        <a href="{% url 'pipeline:lista' %}" {% if ruta.namespace == 'pipeline' and ruta.url_name != 'explorar' %}aria-current="page"{% endif %}>Consultas SQL</a>
+        <a href="{% url 'pipeline:explorar' %}" {% if ruta.view_name == 'pipeline:explorar' %}aria-current="page"{% endif %}>Explorar datos</a>
+      </nav>
+    </div>
+  </header>
+  {% endwith %}
+
+  <main class="pagina">
+    {% for mensaje in messages %}
+      <div class="aviso aviso--{% if mensaje.tags == 'error' %}error{% else %}ok{% endif %}" role="status">
+        <span class="aviso__icono" aria-hidden="true">{% if mensaje.tags == 'error' %}✕{% else %}✓{% endif %}</span>
+        <span>{{ mensaje }}</span>
+      </div>
+    {% endfor %}
+    {% block contenido %}{% endblock %}
+    <p class="pie">Prueba técnica · VP Estructuración Mercado de Capitales · Datos: pipeline SQL sobre PostgreSQL</p>
+  </main>
+
+  {% block scripts %}{% endblock %}
+</body>
+</html>

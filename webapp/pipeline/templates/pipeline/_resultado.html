@@ -1,0 +1,13 @@
+{% load formato %}
+<div class="tabla-scroll" style="max-height: 520px; overflow: auto;">
+  <table>
+    <thead><tr>{% for c in resultado.columnas %}<th>{{ c }}</th>{% endfor %}</tr></thead>
+    <tbody>
+      {% for fila in resultado.filas %}
+        <tr>{% for v in fila %}<td class="{% if v is None %}nulo{% elif v|es_numero %}num{% endif %}">{{ v|celda }}</td>{% endfor %}</tr>
+      {% empty %}
+        <tr><td class="vacio" colspan="{{ resultado.columnas|length|default:1 }}">La consulta no devolvió filas.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>

@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% load formato %}
+
+{% block titulo %}Explorar datos · Analítica de Inversiones{% endblock %}
+
+{% block contenido %}
+<div class="encabezado">
+  <div>
+    <h1>Explorar datos</h1>
+    <p>Consultas de solo lectura sobre las capas del pipeline: una sola sentencia <span class="mono">SELECT</span>/<span class="mono">WITH</span>,
+       en una transacción <span class="mono">READ ONLY</span>, con un máximo de 5 s y 500 filas.</p>
+  </div>
+</div>
+
+<div class="tarjeta">
+  <div class="ejemplos" aria-label="Ejemplos">
+    {% for nombre, sql in ejemplos %}<a class="etiqueta etiqueta--info" href="?sql={{ sql|urlencode }}">{{ nombre }}</a>{% endfor %}
+  </div>
+  <form method="post" style="margin-top:12px">
+    {% csrf_token %}
+    <label for="sql" class="tarjeta__nota">Consulta</label>
+    <textarea id="sql" name="sql" class="sql" spellcheck="false">{{ texto }}</textarea>
+    <div class="acciones">
+      <button type="submit">▶ Ejecutar consulta</button>
+      <span class="tarjeta__nota">Esquemas: <span class="mono">mart</span>, <span class="mono">core</span>, <span class="mono">staging</span>, <span class="mono">calidad</span>, <span class="mono">raw</span></span>
+    </div>
+  </form>
+</div>
+
+{% if error %}
+  <div class="aviso aviso--error" style="margin-top:16px"><span class="aviso__icono" aria-hidden="true">✕</span><span class="mono">{{ error }}</span></div>
+{% endif %}
+
+{% if resultado %}
+<section class="seccion">
+  <h2>Resultado <span class="seccion__sub">{{ resultado.filas|length }} filas{% if resultado.truncado %} (limitado a 500){% endif %} · {{ resultado.duracion_ms|floatformat:0 }} ms</span></h2>
+  <div class="tarjeta">{% include "pipeline/_resultado.html" %}</div>
+</section>
+{% endif %}
+{% endblock %}
