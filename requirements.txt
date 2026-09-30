@@ -1,0 +1,12 @@
+# Base de datos / ETL
+psycopg[binary]==3.2.*
+python-dotenv==1.1.*
+pandas==2.3.*
+
+# Aplicación web
+Django==5.2.*
+plotly==6.*
+
+# Modelo analítico
+scikit-learn==1.7.*
+yfinance==0.2.*

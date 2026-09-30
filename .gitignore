@@ -1,0 +1,25 @@
+# Datos suministrados: NO se versionan (requisito de la prueba)
+data/
+*.csv
+*.docx
+
+# Entorno
+.env
+.venv/
+venv/
+
+# Python
+__pycache__/
+*.py[cod]
+.ipynb_checkpoints/
+
+# Django
+db.sqlite3
+staticfiles/
+media/
+
+# IDE / SO
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
