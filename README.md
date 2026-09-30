@@ -178,7 +178,7 @@ La aplicación solo **lee** las vistas `mart`: toda la transformación ocurre en
 | **Calidad de datos** (`/calidad/`) | Bitácora de reglas del pipeline y cuántas filas afectó cada una |
 | **Consultas SQL** (`/consultas/`) | **Gestión de los queries**: scripts por capa con su descripción, SQL resaltado, vista previa de cada tabla o vista que crean, ejecución del pipeline e historial de ejecuciones con duración y errores por paso |
 | **Explorar datos** (`/consultas/explorar/`) | Consola SQL de solo lectura con consultas de ejemplo |
-| **Asistente con IA** (en la ficha del cliente) | Borrador de resumen y propuesta comercial redactado por Claude (ver sección 5) |
+| **Asistente con IA** (en la ficha del cliente) | Borrador de resumen y propuesta comercial redactado por un modelo de lenguaje local (ver sección 5) |
 
 Decisiones:
 
@@ -253,28 +253,52 @@ sin serie propia; los FICs y CDT se tratan como independientes del resto del por
 
 ## 5. Asistente comercial con IA (opcional)
 
-En la ficha de cada cliente, un botón pide a **Claude (Opus 5.5, API de Anthropic)** que redacte un
-borrador para el gerente: **resumen del cliente, puntos clave, propuesta de siguiente paso, guion para la
-llamada y alertas**. Parte de lo que ya calculó el pipeline (riesgo, perfil declarado vs. implícito,
-segmento, recomendaciones y principales posiciones).
+En la ficha de cada cliente, un botón pide a un **modelo de lenguaje abierto que corre en el propio
+equipo** (Qwen 2.5 7B vía [Ollama](https://ollama.com)) un borrador para el gerente: **resumen del cliente,
+puntos clave, propuesta de siguiente paso, guion para la llamada y alertas**. Parte de lo que ya calculó el
+pipeline (riesgo, perfil declarado vs. implícito, segmento, recomendaciones y principales posiciones).
 
 **Cómo potencia la herramienta:** el modelo analítico dice *qué* hacer con cada cliente; el asistente lo
 convierte en una conversación lista para preparar. Un gerente con decenas de clientes pasa de leer tablas a
-tener, en segundos, el argumento y las preguntas para la llamada, siempre coherentes con el perfil de riesgo.
+tener el argumento y las preguntas para la llamada, siempre coherentes con el perfil de riesgo.
 
 Decisiones de diseño (`webapp/portafolios/ia.py`):
 
-- **Privacidad:** a la API **no se envía el ID del cliente ni datos personales**, solo cifras agregadas
-  del portafolio y nombres de instrumentos de mercado. La ficha muestra exactamente qué se envió.
+- **Modelo local y gratuito:** sin API key, sin costo por uso y sin internet. **Los datos no salen del
+  equipo**, un requisito natural para información de clientes de un banco.
+- **Mínimo de datos:** aun siendo local, al modelo no se le pasa el ID del cliente ni datos personales,
+  solo cifras agregadas del portafolio. La ficha muestra exactamente qué recibió.
 - **Sin cifras inventadas:** el modelo solo redacta con los datos entregados; todos los números vienen
-  del pipeline.
+  del pipeline (temperatura 0,2).
 - **Adecuación incorporada:** si el cliente no tiene perfil de riesgo, la propuesta no puede recomendar
   productos y debe empezar por el perfilamiento; si el riesgo supera el perfil, prioriza la revisión.
-- **Salida estructurada** (JSON Schema) para mostrarla por secciones; `fallbacks: "default"` por si el
-  modelo declina; manejo explícito de rechazos y respuestas truncadas.
-- **Costo controlado:** cada propuesta se guarda (`PropuestaIA`) con los tokens usados; solo se regenera
-  a pedido. Se presenta siempre como borrador que el gerente debe validar.
+- **Salida estructurada** (JSON Schema en `format`) y validación antes de guardar: un modelo pequeño
+  puede desviarse del esquema, así que se revisan los campos y se normalizan las listas.
+- **Salvaguardas contra errores del modelo** (medidas en pruebas reales con Qwen 2.5 7B):
+  - Los hechos clave (perfil declarado, perfil implícito, coherencia) van en líneas explícitas al inicio
+    del mensaje, y los montos llegan **ya formateados con su moneda**. En las primeras pruebas el modelo
+    confundía US$ con millones de pesos o multiplicaba montos por 1.000 al reformatearlos.
+  - **Verificación automática:** si el texto atribuye al cliente un perfil distinto al registrado, o dice
+    que el portafolio es coherente cuando no lo es, se reintenta una vez; si persiste, la propuesta se
+    guarda con una **advertencia visible** para el gerente.
+  - Temperatura 0 para que el modelo se ciña al máximo a los datos.
+- Cada propuesta se guarda (`PropuestaIA`) con los tokens usados y solo se regenera a pedido. Se
+  presenta siempre como borrador que el gerente debe validar.
 
-Para activarlo, agrega `ANTHROPIC_API_KEY=...` al archivo `.env`. Sin la key, el resto de la aplicación
-funciona igual y el botón indica cómo activarlo. Las pruebas (`python manage.py test portafolios`)
-simulan la API: verifican la petición, que el ID no se envíe y el manejo de rechazos, sin costo.
+**Para activarlo:**
+
+```bash
+# Windows: winget install Ollama.Ollama   ·   macOS/Linux: https://ollama.com/download
+ollama pull qwen2.5:7b     # ~4,7 GB, una sola vez
+```
+
+El modelo se configura con `OLLAMA_MODEL` y `OLLAMA_HOST` en `.env`. Sin Ollama, el resto de la
+aplicación funciona igual y el botón indica cómo activarlo. En un portátil sin GPU dedicada (15 GB de RAM)
+cada propuesta tardó **entre 1,5 y 3 minutos**; con GPU o un modelo más pequeño (`qwen2.5:3b`) es más rápido.
+Conviene generar con anticipación las propuestas de los clientes que se van a revisar: quedan guardadas.
+
+Las pruebas (`python manage.py test portafolios`, 15 casos) simulan el modelo: verifican la petición, que el
+ID no se envíe, el manejo de respuestas inválidas o truncadas y la verificación automática con reintento.
+
+**Limitación:** un modelo de 7B redacta bien, pero puede equivocarse en juicios (p. ej. llamar "significativo"
+un riesgo pequeño) o, pese al reintento, contradecir un dato; por eso la verificación y el aviso de borrador.
